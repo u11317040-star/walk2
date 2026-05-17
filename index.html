@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注音打字冒險島</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f8ff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        #level-title {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        /* 遊戲跑道與角色 */
+        .game-container {
+            width: 80%;
+            max-width: 800px;
+            background-color: #fff;
+            border: 4px solid #34495e;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .track {
+            height: 500px;
+            background-color: #fff; 
+            border: 2px solid #bdc3c7; 
+            position: relative;
+            margin-bottom: 30px;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        /* 安妮亞角色設定 */
+        #character {
+            width: 300px; 
+            height: 300px; 
+            position: absolute;
+            bottom: 5px; 
+            left: 0%;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            
+            /* 將前進速度放慢至 0.8 秒，讓移動過程更清晰可見 */
+            transition: left 0.8s ease-out;
+            /* 因為原圖向左，使用 scaleX(-1) 將圖片水平翻轉成向右 */
+            transform: scaleX(-1);
+            /* 載入 4 張圖片的走路動畫，0.6秒循環一次 */
+            animation: walk-animation 0.6s infinite;
+        }
+
+        /* 4張獨立圖片的輪播動畫 */
+        @keyframes walk-animation {
+            0%, 24% { background-image: url('walk1.png'); }
+            25%, 49% { background-image: url('walk2.png'); }
+            50%, 74% { background-image: url('walk3.png'); }
+            75%, 100% { background-image: url('walk4.png'); }
+        }
+
+        #destination {
+            font-size: 200px;
+            position: absolute;
+            bottom: 15px;
+            right: 10px;
+        }
+
+        /* 顯示注音的區域 */
+        .word-display {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            font-size: 40px;
+            font-weight: bold;
+            letter-spacing: 5px;
+            margin-bottom: 20px;
+        }
+
+        .char {
+            color: #95a5a6;
+        }
+
+        .char.correct {
+            color: #2ecc71;
+            text-shadow: 0 0 5px rgba(46, 204, 113, 0.5);
+        }
+
+        /* 提示區域 */
+        .hint-box {
+            font-size: 18px;
+            color: #7f8c8d;
+            background-color: #e8f4f8;
+            padding: 10px 20px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .hint-key {
+            background-color: #fff;
+            border: 2px solid #bdc3c7;
+            border-radius: 5px;
+            padding: 2px 8px;
+            font-family: monospace;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+
+        /* 隱藏的輸入框，用來捕捉鍵盤事件 */
+        #keyboard-input {
+            position: absolute;
+            opacity: 0;
+            top: -100px;
+        }
+
+        .focus-notice {
+            color: #e67e22;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>壓英文字鍵學注音！</h1>
+    <div id="level-title">載入中...</div>
+
+    <div class="game-container">
+        <div class="track">
+            <div id="character"></div>
+            <div id="destination">🚩</div>
+        </div>
+
+        <div class="word-display" id="word-display"></div>
+
+        <div class="hint-box" id="hint-box">
+            請將輸入法切換為 <span class="hint-key">英文輸入法</span>，並點擊畫面開始！
+        </div>
+    </div>
+
+    <div class="focus-notice">點擊畫面的任何地方可以重新聚焦，繼續打字。</div>
+
+    <input type="text" id="keyboard-input" autocomplete="off">
+
+    <script>
+        // 關卡資料：包含顯示的注音與對應需要按下的英文鍵
+        const stages = [
+            {
+                name: "第一關：森林 (ㄙㄣ ㄌㄧㄣˊ)",
+                zhuyin: ["ㄙ", "ㄣ", " ", "ㄌ", "ㄧ", "ㄣ", "ˊ"],
+                keys:   ["n",  "p",  " ", "x",  "u",  "p",  "6"],
+                icon: "🌲"
+            },
+            {
+                name: "第二關：沙漠 (ㄕㄚ ㄇㄛˋ)",
+                zhuyin: ["ㄕ", "ㄚ", " ", "ㄇ", "ㄛ", "ˋ"],
+                keys:   ["g",  "8",  " ", "a",  "i",  "4"],
+                icon: "🌵"
+            },
+            {
+                name: "第三關：洞窟 (ㄉㄨㄥˋ ㄎㄨ)",
+                zhuyin: ["ㄉ", "ㄨ", "ㄥ", "ˋ", "ㄎ", "ㄨ"," "],
+                keys:   ["2",  "j",  "/",  "4", "d",  "j"," "],
+                icon: "💎"
+            }
+        ];
+
+        let currentStageIndex = 0;
+        let currentKeyIndex = 0;
+
+        const levelTitle = document.getElementById('level-title');
+        const wordDisplay = document.getElementById('word-display');
+        const character = document.getElementById('character');
+        const destination = document.getElementById('destination');
+        const hintBox = document.getElementById('hint-box');
+        const keyboardInput = document.getElementById('keyboard-input');
+
+        // 初始化關卡
+        function initStage() {
+            const stage = stages[currentStageIndex];
+            levelTitle.innerText = stage.name;
+            destination.innerText = stage.icon;
+            currentKeyIndex = 0;
+            character.style.left = '0%';
+
+            // 渲染注音字元
+            wordDisplay.innerHTML = '';
+            stage.zhuyin.forEach((char, index) => {
+                const span = document.createElement('span');
+                span.classList.add('char');
+                span.innerText = char === ' ' ? ' ␣ ' : char;
+                wordDisplay.appendChild(span);
+            });
+
+            updateHint();
+            keyboardInput.focus();
+        }
+
+        // 更新提示訊息
+        function updateHint() {
+            const stage = stages[currentStageIndex];
+            if (currentKeyIndex < stage.keys.length) {
+                const nextKey = stage.keys[currentKeyIndex];
+                const nextZhuyin = stage.zhuyin[currentKeyIndex];
+                
+                if (nextKey === ' ') {
+                    hintBox.innerHTML = `接下來請按 <span class="hint-key">Space (空白鍵)</span>`;
+                } else {
+                    hintBox.innerHTML = `提示：注音「${nextZhuyin}」請按下英文鍵 <span class="hint-key">${nextKey.toUpperCase()}</span>`;
+                }
+            }
+        }
+
+        // 監聽鍵盤輸入
+        window.addEventListener('keydown', (e) => {
+            keyboardInput.focus();
+
+            const stage = stages[currentStageIndex];
+            const targetKey = stage.keys[currentKeyIndex];
+            let pressedKey = e.key.toLowerCase();
+
+            if (e.key === ' ') {
+                e.preventDefault();
+                pressedKey = ' ';
+            }
+
+            // 檢查是否輸入正確
+            if (pressedKey === targetKey) {
+                const charSpans = wordDisplay.querySelectorAll('.char');
+                charSpans[currentKeyIndex].classList.add('correct');
+
+                currentKeyIndex++;
+
+                // 【已修改】調整為 400px，讓安妮亞在打字前進時能靠得更近
+                const ratio = currentKeyIndex / stage.keys.length; 
+                character.style.left = `calc(${ratio * 100}% - ${ratio * 400}px)`;
+
+                // 檢查是否通關
+                if (currentKeyIndex >= stage.keys.length) {
+                    setTimeout(nextStage, 1000); 
+                } else {
+                    updateHint();
+                }
+            }
+        });
+
+        // 進入下一關
+        function nextStage() {
+            currentStageIndex++;
+            if (currentStageIndex < stages.length) {
+                alert("太棒了！準備前往下一個場景！");
+                initStage();
+            } else {
+                hintBox.innerHTML = "🎉 恭喜通關！你已經掌握了這些注音的英文鍵位！";
+                levelTitle.innerText = " 冒險完成！";
+                // 【已修改】通關終點也同步修正為 400px
+                character.style.left = 'calc(100% - 400px)';
+            }
+        }
+
+        document.addEventListener('click', () => {
+            keyboardInput.focus();
+        });
+
+        // 遊戲啟動
+        initStage();
+    </script>
+</body>
+</html>
